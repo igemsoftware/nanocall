@@ -31,6 +31,8 @@ long get_cpu_time_ms()
     return (t * 1000) / CLOCKS_PER_SEC;
 }
 
+constexpr size_t num_strands = 2;
+
 #ifndef FLOAT_TYPE
 #define FLOAT_TYPE float
 #endif
@@ -117,9 +119,9 @@ SwitchArg no_train_scaling("",
                            "Do not train pore model scaling.",
                            cmd_parser);
 SwitchArg two_d_hmm("",
-                 "2d-hmm",
-                 "Fit states to two-directional HMM if possible.",
-                 cmd_parser);
+                    "2d-hmm",
+                    "Fit states to two-directional HMM if possible.",
+                    cmd_parser);
 SwitchArg only_train("", "only-train", "Stop after training.", cmd_parser);
 SwitchArg train("", "train", "Enable training.", cmd_parser);
 SwitchArg no_train("", "no-train", "Disable all training.", cmd_parser);
@@ -333,8 +335,8 @@ void train_reads(const Pore_Model_Dict_Type& models,
             //
             // create per-strand list of models to try
             //
-            array<list<string>, 2> model_list;
-            for (unsigned st = 0; st < 2; ++st) {
+            array<list<string>, num_strands> model_list;
+            for (unsigned st = 0; st < num_strands; ++st) {
                 // if not enough events, ignore strand
                 if (read_summary.events(st).size() < opts::min_read_len)
                     continue;
@@ -347,7 +349,7 @@ void train_reads(const Pore_Model_Dict_Type& models,
                 else {
                     // no preferred model, try all that apply to this strand
                     for (const auto& p : models) {
-                        if (p.second.strand() == st or p.second.strand() == 2) {
+                        if (p.second.strand() == st or p.second.strand() == num_strands) {
                             model_list[st].push_back(p.first);
                         }
                     }
@@ -357,8 +359,8 @@ void train_reads(const Pore_Model_Dict_Type& models,
             //
             // create per-strand list of event sequences on which to train
             //
-            array<vector<Event_Sequence_Type>, 2> train_event_seqs;
-            for (unsigned st = 0; st < 2; ++st) {
+            array<vector<Event_Sequence_Type>, num_strands> train_event_seqs;
+            for (unsigned st = 0; st < num_strands; ++st) {
                 // if not enough events, ignore strand
                 if (read_summary.events(st).size() < opts::min_read_len)
                     continue;
@@ -368,9 +370,9 @@ void train_reads(const Pore_Model_Dict_Type& models,
                         read_summary.events(st).size());
                 train_event_seqs[st].emplace_back(
                     read_summary.events(st).begin(),
-                    read_summary.events(st).begin() + num_train_events / 2);
+                    read_summary.events(st).begin() + num_train_events / num_strands);
                 train_event_seqs[st].emplace_back(
-                    read_summary.events(st).end() - num_train_events / 2,
+                    read_summary.events(st).end() - num_train_events / num_strands,
                     read_summary.events(st).end());
             }
             //
@@ -380,17 +382,17 @@ void train_reads(const Pore_Model_Dict_Type& models,
                 // prepare vector of event sequences
                 vector<pair<const Event_Sequence_Type*, unsigned>>
                     train_event_seq_ptrs;
-                for (unsigned st = 0; st < 2; ++st) {
+                for (unsigned st = 0; st < num_strands; ++st) {
                     for (const auto& events : train_event_seqs[st]) {
                         train_event_seq_ptrs.push_back(make_pair(&events, st));
                     }
                 }
                 // track model fit
                 // key = pore model name; value = fit
-                map<array<string, 2>, FLOAT_TYPE> model_fit;
+                map<array<string, num_strands>, FLOAT_TYPE> model_fit;
                 for (const auto& m_name_0 : model_list[0]) {
                     for (const auto& m_name_1 : model_list[1]) {
-                        array<string, 2> m_name_key = {{m_name_0, m_name_1}};
+                        array<string, num_strands> m_name_key = {{m_name_0, m_name_1}};
                         string m_name = m_name_0 + "+" + m_name_1;
                         unsigned round = 0;
                         auto& crt_pm_params =
@@ -402,7 +404,7 @@ void train_reads(const Pore_Model_Dict_Type& models,
                         while (true) {
                             Pore_Model_Parameters_Type old_pm_params(
                                 crt_pm_params);
-                            std::array<State_Transition_Parameters_Type, 2>
+                            std::array<State_Transition_Parameters_Type, num_strands>
                                 old_st_params(crt_st_params);
                             auto old_fit = crt_fit;
                             bool done;
@@ -417,7 +419,7 @@ void train_reads(const Pore_Model_Dict_Type& models,
 
                             LOG(debug)
                                 << "scaling_round read ["
-                                << read_summary.read_id << "] strand [" << 2
+                                << read_summary.read_id << "] strand [" << num_strands
                                 << "] model [" << m_name << "] old_pm_params ["
                                 << old_pm_params << "] old_st_params ["
                                 << old_st_params[0] << "," << old_st_params[1]
@@ -436,7 +438,7 @@ void train_reads(const Pore_Model_Dict_Type& models,
                             if (crt_fit < old_fit) {
                                 LOG(info)
                                     << "scaling_regression read ["
-                                    << read_summary.read_id << "] strand [" << 2
+                                    << read_summary.read_id << "] strand [" << num_strands
                                     << "] model [" << m_name << "] old_params ["
                                     << old_pm_params << "] old_st_params ["
                                     << old_st_params[0] << ","
@@ -464,7 +466,7 @@ void train_reads(const Pore_Model_Dict_Type& models,
 
                         }; // while true
                         LOG(info) << "scaling_result read ["
-                                  << read_summary.read_id << "] strand [" << 2
+                                  << read_summary.read_id << "] strand [" << num_strands
                                   << "] model [" << m_name << "] pm_params ["
                                   << crt_pm_params << "] st_params ["
                                   << crt_st_params[0] << "," << crt_st_params[1]
@@ -500,7 +502,7 @@ void train_reads(const Pore_Model_Dict_Type& models,
             }
             else // not scale_strands_together
             {
-                for (unsigned st = 0; st < 2; ++st) {
+                for (unsigned st = 0; st < num_strands; ++st) {
                     // if not enough events, ignore strand
                     if (read_summary.events(st).size() < opts::min_read_len)
                         continue;
@@ -512,7 +514,7 @@ void train_reads(const Pore_Model_Dict_Type& models,
                     }
                     map<string, FLOAT_TYPE> model_fit;
                     for (const auto& m_name : model_list[st]) {
-                        array<string, 2> m_name_key;
+                        array<string, num_strands> m_name_key;
                         m_name_key[st] = m_name;
                         unsigned round = 0;
                         auto& crt_pm_params =
@@ -524,7 +526,7 @@ void train_reads(const Pore_Model_Dict_Type& models,
                         while (true) {
                             Pore_Model_Parameters_Type old_pm_params(
                                 crt_pm_params);
-                            array<State_Transition_Parameters_Type, 2>
+                            array<State_Transition_Parameters_Type, num_strands>
                                 old_st_params(crt_st_params);
                             auto old_fit = crt_fit;
                             bool done;
@@ -665,8 +667,8 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
             read_summary.load_events();
 
             // compute read statistics used to check scaling
-            array<pair<FLOAT_TYPE, FLOAT_TYPE>, 2> r_stats;
-            for (unsigned st = 0; st < 2; ++st) {
+            array<pair<FLOAT_TYPE, FLOAT_TYPE>,num_strands> r_stats;
+            for (unsigned st = 0; st < num_strands; ++st) {
                 // if not enough events, ignore strand
                 if (read_summary.events(st).size() < opts::min_read_len)
                     continue;
@@ -720,10 +722,27 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                 vit.fill(pm, *transitions_ptr, corrected_events);
                 return std::make_tuple(vit.path_probability(), vit.base_seq());
             };
+            LOG(info) << "2d_hmm=" << opts::two_d_hmm << endl;
+            LOG(info) << "scale_strands_together="
+                      << read_summary.scale_strands_together << endl;
+            bool can_do_2d =
+                min(read_summary.events(0).size(),
+                    read_summary.events(1).size()) >= opts::min_read_len;
+            bool do_2d = can_do_2d && opts::two_d_hmm;
+            if (opts::two_d_hmm && !can_do_2d) {
+                LOG(error)
+                    << "2D analysis cannot be performed, as there is not "
+                       "enough template or complement strand data"
+                    << endl;
+            }
+            if (do_2d) {
+                LOG(info) << "2D analysis will be performed" << endl;
+            }
+            string read_seqs[num_strands];
 
             if (read_summary.scale_strands_together) {
                 // create list of models to try
-                list<array<string, 2>> model_sublist;
+                list<array<string, num_strands>> model_sublist;
                 if (not read_summary.preferred_model[2][0].empty()) {
                     // if we have a preferred model, use that
                     model_sublist.push_back(read_summary.preferred_model[2]);
@@ -740,8 +759,8 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                 deque<tuple<FLOAT_TYPE, FLOAT_TYPE, FLOAT_TYPE, string, string,
                             string, string>> results;
                 for (const auto& m_name : model_sublist) {
-                    array<tuple<FLOAT_TYPE, string>, 2> part_results;
-                    for (unsigned st = 0; st < 2; ++st) {
+                    array<tuple<FLOAT_TYPE, string>, num_strands> part_results;
+                    for (unsigned st = 0; st < num_strands; ++st) {
                         part_results[st] = basecall_strand(
                             st, m_name[st], read_summary.pm_params_m.at(m_name),
                             read_summary.st_params_m.at(m_name)[st]);
@@ -755,16 +774,16 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                 }
                 // sort results by first component (log path probability)
                 sort(results.begin(), results.end());
-                array<FLOAT_TYPE, 2> best_log_path_prob{
+                array<FLOAT_TYPE, num_strands> best_log_path_prob{
                     {get<1>(results.back()), get<2>(results.back())}};
-                array<string, 2> best_m_name{
+                array<string, num_strands> best_m_name{
                     {get<3>(results.back()), get<4>(results.back())}};
-                array<const string*, 2> base_seq_ptr{
+                array<const string*, num_strands> base_seq_ptr{
                     {&get<5>(results.back()), &get<6>(results.back())}};
                 string best_m_name_str = best_m_name[0] + '+' + best_m_name[1];
                 auto& best_pm_params = read_summary.pm_params_m.at(best_m_name);
                 auto& best_st_params = read_summary.st_params_m.at(best_m_name);
-                for (unsigned st = 0; st < 2; ++st) {
+                for (unsigned st = 0; st < num_strands; ++st) {
                     LOG(info) << "best_model read [" << read_summary.read_id
                               << "] strand [" << st << "] model ["
                               << best_m_name[st] << "] pm_params ["
@@ -780,88 +799,87 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                     ostringstream tmp;
                     tmp << read_summary.read_id << ":"
                         << read_summary.base_file_name << ":" << st;
-                    write_fasta(oss, tmp.str(), *base_seq_ptr[st]);
+                    if (!do_2d) {
+                        write_fasta(oss, tmp.str(), *base_seq_ptr[st]);
+                    }
+                    else {
+                        read_seqs[st] = move(*base_seq_ptr[st]);
+                    }
                 }
             }
             else // not scale_strands_together
             {
-                bool can_do_2d =
-                    min(read_summary.events(0).size(),
-                        read_summary.events(1).size()) >= opts::min_read_len;
-                bool do_2d = can_do_2d && opts::two_d_hmm;
-                if (opts::two_d_hmm && !can_do_2d) {
-                    LOG(error)
-                        << "2D analysis cannot be performed, as there is not "
-                           "enough template or complement strand data"
-                        << endl;
-                }
-                if (do_2d) {
-                    LOG(info) << "2D analysis will be performed" << endl;
-                }
-                else {
-                    string read_seqs[2];
-                    for (unsigned st = 0; st < 2; ++st) {
-                        // if not enough events, ignore strand
-                        if (read_summary.events(st).size() < opts::min_read_len)
-                            continue;
-                        // create list of models to try
-                        list<array<string, 2>> model_sublist;
-                        if (not read_summary.preferred_model[st][st].empty()) {
-                            // if we have a preferred model, use that
-                            model_sublist.push_back(
-                                read_summary.preferred_model[st]);
-                        }
-                        else {
-                            // no preferred model, try all for which we have
-                            // scaling
-                            for (const auto& p : read_summary.pm_params_m) {
-                                if (not p.first[st].empty() and
-                                    p.first[1 - st].empty()) {
-                                    model_sublist.push_back(p.first);
-                                }
+                for (unsigned st = 0; st < num_strands; ++st) {
+                    // if not enough events, ignore strand
+                    if (read_summary.events(st).size() < opts::min_read_len)
+                        continue;
+                    // create list of models to try
+                    list<array<string, num_strands>> model_sublist;
+                    if (not read_summary.preferred_model[st][st].empty()) {
+                        // if we have a preferred model, use that
+                        model_sublist.push_back(
+                            read_summary.preferred_model[st]);
+                    }
+                    else {
+                        // no preferred model, try all for which we have
+                        // scaling
+                        for (const auto& p : read_summary.pm_params_m) {
+                            if (not p.first[st].empty() and
+                                p.first[1 - st].empty()) {
+                                model_sublist.push_back(p.first);
                             }
                         }
-                        // deque of results
-                        deque<tuple<FLOAT_TYPE, string, string>> results;
-                        for (const auto& m_name : model_sublist) {
-                            auto r = basecall_strand(
-                                st, m_name[st],
-                                read_summary.pm_params_m.at(m_name),
-                                read_summary.st_params_m.at(m_name)[st]);
-                            results.emplace_back(get<0>(r), string(m_name[st]),
-                                                 move(get<1>(r)));
-                        }
-                        sort(results.begin(), results.end());
-                        string& best_m_name = get<1>(results.back());
-                        string& base_seq = get<2>(results.back());
-                        array<string, 2> best_m_key;
-                        best_m_key[st] = best_m_name;
-                        LOG(info) << "best_model read [" << read_summary.read_id
-                                  << "] strand [" << st << "] model ["
-                                  << best_m_name << "] pm_params ["
-                                  << read_summary.pm_params_m.at(best_m_key)
-                                  << "] st_params ["
-                                  << read_summary.st_params_m.at(best_m_key)[st]
-                                  << "] log_path_prob ["
-                                  << get<0>(results.back()) << "]" << endl;
-                        read_summary.preferred_model[st][st] = best_m_name;
-                        ostringstream tmp;
-                        tmp << read_summary.read_id << ":"
-                            << read_summary.base_file_name << ":" << st;
-                        if (!do_2d) {
-                            write_fasta(oss, tmp.str(), base_seq);
-                        }
-                        else {
-                            read_seqs[st] = move(base_seq); /* avoid copy */
-                        }
-                    } // for st
-                    if (do_2d) {
-                        LOG(info) << "beginning 2d alignment" << endl;
-                        seqan::DnaString first(read_seqs[0]);
-                        seqan::DnaString second(read_seqs[1]);
-                        abort();
                     }
-                }
+                    // deque of results
+                    deque<tuple<FLOAT_TYPE, string, string>> results;
+                    for (const auto& m_name : model_sublist) {
+                        auto r = basecall_strand(
+                            st, m_name[st], read_summary.pm_params_m.at(m_name),
+                            read_summary.st_params_m.at(m_name)[st]);
+                        results.emplace_back(get<0>(r), string(m_name[st]),
+                                             move(get<1>(r)));
+                    }
+                    sort(results.begin(), results.end());
+                    string& best_m_name = get<1>(results.back());
+                    string& base_seq = get<2>(results.back());
+                    array<string, num_strands> best_m_key;
+                    best_m_key[st] = best_m_name;
+                    LOG(info) << "best_model read [" << read_summary.read_id
+                              << "] strand [" << st << "] model ["
+                              << best_m_name << "] pm_params ["
+                              << read_summary.pm_params_m.at(best_m_key)
+                              << "] st_params ["
+                              << read_summary.st_params_m.at(best_m_key)[st]
+                              << "] log_path_prob [" << get<0>(results.back())
+                              << "]" << endl;
+                    read_summary.preferred_model[st][st] = best_m_name;
+                    ostringstream tmp;
+                    tmp << read_summary.read_id << ":"
+                        << read_summary.base_file_name << ":" << st;
+                    if (!do_2d) {
+                        write_fasta(oss, tmp.str(), base_seq);
+                    }
+                    else {
+                        read_seqs[st] = move(base_seq);
+                    }
+                } // for st
+            }
+            if (do_2d) {
+                LOG(info) << "beginning 2d alignment" << endl;
+                seqan::DnaString first(read_seqs[0]);
+                seqan::DnaString second(read_seqs[1]);
+                using TAlign = seqan::Align<seqan::DnaString, seqan::ArrayGaps>;
+                TAlign alignment;
+                resize(rows(alignment), num_strands);
+                assignSource(row(alignment, 0), first);
+                assignSource(row(alignment, 1), second);
+                int score = globalAlignment(
+                    alignment, seqan::Score<int, seqan::Simple>(0, -1, 1));
+                oss << "Score: " << score << endl;
+                oss << first << endl;
+                oss << second << endl;
+                oss << align << endl;
+                LOG(info) << "finished 2d alignment" << endl;
             }
             read_summary.drop_events();
         },
