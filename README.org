@@ -8,7 +8,7 @@ Nanocall can be built from source in a classical UNIX environment, or directly u
 
 ***** Under a Classical UNIX Environment
 
-Nanocall uses =cmake= for configuration and =make= for building. The prerequisites needed for building are =zlib= and =hdf5=. On UNIX systems, =hdf5= can be optionally built as a submodule.
+Nanocall uses =cmake= for configuration and =make= for building. The prerequisites needed for building are =zlib=, =hdf5=, and =seqan=. On UNIX systems, =hdf5= can be optionally built as a submodule. Look [[https://seqan.readthedocs.org/en/master/Infrastructure/Use/Install.html][here]] for information on installing =seqan=.
 Example build:
 
 #+BEGIN_EXAMPLE
@@ -67,4 +67,3 @@ docker run --rm -u $(id -u):$(id -g) -v /path/to/data:/data nanocall -t 4 . >out
 **** License
 
 Released under the [[LICENSE][MIT license]].
-

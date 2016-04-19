@@ -2,6 +2,7 @@
 #include <iostream>
 #include <string>
 #include <tclap/CmdLine.h>
+#include <seqan/align.h>
 
 #include <ctime>
 
@@ -115,6 +116,10 @@ SwitchArg no_train_scaling("",
                            "no-train-scaling",
                            "Do not train pore model scaling.",
                            cmd_parser);
+SwitchArg two_d_hmm("",
+                 "2d-hmm",
+                 "Fit states to two-directional HMM if possible.",
+                 cmd_parser);
 SwitchArg only_train("", "only-train", "Stop after training.", cmd_parser);
 SwitchArg train("", "train", "Enable training.", cmd_parser);
 SwitchArg no_train("", "no-train", "Disable all training.", cmd_parser);
@@ -780,8 +785,18 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
             }
             else // not scale_strands_together
             {
-                if (read_summary.events(1).size() < opts::min_read_len) {
-                    LOG(error) << "NO COMPLEMENT STRAND" << endl;
+                bool can_do_2d =
+                    min(read_summary.events(0).size(),
+                        read_summary.events(1).size()) >= opts::min_read_len;
+                bool do_2d = can_do_2d && opts::two_d_hmm;
+                if (opts::two_d_hmm && !can_do_2d) {
+                    LOG(error)
+                        << "2D analysis cannot be performed, as there is not "
+                           "enough template or complement strand data"
+                        << endl;
+                }
+                if (do_2d) {
+                    LOG(info) << "2D analysis will be performed" << endl;
                 }
                 else {
                     string read_seqs[2];
@@ -833,10 +848,19 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                         ostringstream tmp;
                         tmp << read_summary.read_id << ":"
                             << read_summary.base_file_name << ":" << st;
-                        write_fasta(oss, tmp.str(), base_seq);
-                        read_seqs[st] = move(base_seq);
+                        if (!do_2d) {
+                            write_fasta(oss, tmp.str(), base_seq);
+                        }
+                        else {
+                            read_seqs[st] = move(base_seq); /* avoid copy */
+                        }
                     } // for st
-                    /* TODO: add in alignment / basecalling logic here */
+                    if (do_2d) {
+                        LOG(info) << "beginning 2d alignment" << endl;
+                        seqan::DnaString first(read_seqs[0]);
+                        seqan::DnaString second(read_seqs[1]);
+                        abort();
+                    }
                 }
             }
             read_summary.drop_events();
