@@ -386,7 +386,7 @@ void train_reads(const Pore_Model_Dict_Type& models,
                 for (const auto& m_name_0 : model_list[0]) {
                     for (const auto& m_name_1 : model_list[1]) {
                         array<string, 2> m_name_key = {{m_name_0, m_name_1}};
-                        string m_name               = m_name_0 + "+" + m_name_1;
+                        string m_name = m_name_0 + "+" + m_name_1;
                         unsigned round = 0;
                         auto& crt_pm_params =
                             read_summary.pm_params_m.at(m_name_key);
@@ -444,7 +444,7 @@ void train_reads(const Pore_Model_Dict_Type& models,
                                     << endl;
                                 crt_pm_params = old_pm_params;
                                 crt_st_params = old_st_params;
-                                crt_fit       = old_fit;
+                                crt_fit = old_fit;
                                 break;
                             }
 
@@ -482,9 +482,9 @@ void train_reads(const Pore_Model_Dict_Type& models,
                                                .get() <
                                        it_max->second;
                         })) {
-                        const auto& m_name_0               = it_max->first[0];
-                        const auto& m_name_1               = it_max->first[1];
-                        auto m_name                        = m_name_0 + '+' + m_name_1;
+                        const auto& m_name_0 = it_max->first[0];
+                        const auto& m_name_1 = it_max->first[1];
+                        auto m_name = m_name_0 + '+' + m_name_1;
                         read_summary.preferred_model[2][0] = m_name_0;
                         read_summary.preferred_model[2][1] = m_name_1;
                         LOG(info)
@@ -562,7 +562,7 @@ void train_reads(const Pore_Model_Dict_Type& models,
                                     << round << "]" << endl;
                                 crt_pm_params = old_pm_params;
                                 crt_st_params = old_st_params;
-                                crt_fit       = old_fit;
+                                crt_fit = old_fit;
                                 break;
                             }
 
@@ -757,7 +757,7 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                 array<const string*, 2> base_seq_ptr{
                     {&get<5>(results.back()), &get<6>(results.back())}};
                 string best_m_name_str = best_m_name[0] + '+' + best_m_name[1];
-                auto& best_pm_params   = read_summary.pm_params_m.at(best_m_name);
+                auto& best_pm_params = read_summary.pm_params_m.at(best_m_name);
                 auto& best_st_params = read_summary.st_params_m.at(best_m_name);
                 for (unsigned st = 0; st < 2; ++st) {
                     LOG(info) << "best_model read [" << read_summary.read_id
@@ -784,6 +784,7 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                     LOG(error) << "NO COMPLEMENT STRAND" << endl;
                 }
                 else {
+                    string read_seqs[2];
                     for (unsigned st = 0; st < 2; ++st) {
                         // if not enough events, ignore strand
                         if (read_summary.events(st).size() < opts::min_read_len)
@@ -817,7 +818,7 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                         }
                         sort(results.begin(), results.end());
                         string& best_m_name = get<1>(results.back());
-                        string& base_seq    = get<2>(results.back());
+                        string& base_seq = get<2>(results.back());
                         array<string, 2> best_m_key;
                         best_m_key[st] = best_m_name;
                         LOG(info) << "best_model read [" << read_summary.read_id
@@ -833,7 +834,9 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                         tmp << read_summary.read_id << ":"
                             << read_summary.base_file_name << ":" << st;
                         write_fasta(oss, tmp.str(), base_seq);
+                        read_seqs[st] = move(base_seq);
                     } // for st
+                    /* TODO: add in alignment / basecalling logic here */
                 }
             }
             read_summary.drop_events();

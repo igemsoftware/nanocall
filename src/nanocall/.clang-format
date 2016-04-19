@@ -3,7 +3,7 @@
 Language: Cpp # used for C as well, not just C++
 AlignEscapedNewlinesLeft: true
 AlignTrailingComments: true
-AlignConsecutiveAssignments: true
+AlignConsecutiveAssignments: false
 AllowAllParametersOfDeclarationOnNextLine: true
 AllowShortLoopsOnASingleLine: true
 AllowShortBlocksOnASingleLine: true
